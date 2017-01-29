@@ -18,7 +18,7 @@ defmodule Samples.Mixfile do
 
   defp deps do
     [
-      { :reducer_machine, path: "../" }
+      { :diet, path: "../" }
     ]
   end
 end
