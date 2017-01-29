@@ -16,17 +16,27 @@ defmodule ReducerMachine.Transformations do
 
     transforms do
 
-      { :encode, string } -> { :rle, { String.codepoints(string), [] } }
+      { :rle, {[], result} } ->
+              {:done, result |> Enum.reverse}
 
-      { :rle, {[], result} } -> { :done, result |> Enum.reverse |> Enum.join }
-      { :rle, {[{a,n},a|tail], result } -> { :rle, {[ {a,n+1} | tail ], result}
-      { :rle, {[a,a|tail], result }     -> { :rle, { [ {a,2} | tail ], result }
-      { :rle, {[a|tail], result }       -> { :rle, { [ tail, [ a | result ]}
+      { :rle, {[ {a, n}, a | tail], result }} ->
+              {:rle, {[{a, n+1} | tail], result}}
 
+      { :rle, {[ a, a | tail ], result } } ->
+              {:rle, {[{a, 2} | tail], result }}
+
+      { :rle, {[a | tail ], result } } ->
+              {:rle, {tail, [a | result]  }}
+
+      { :rle, list } ->
+              {:rle, {list, []}}
     end
+
   end
   ~~~
 
+  In the RLE example, the atom `:rle` is actually not needed at the
+  fron of each tuple.
   ## Internals
 
   Each transform is converted into a function called `step`. This
@@ -61,26 +71,29 @@ defmodule ReducerMachine.Transformations do
   the new value when it returns.
   """
 
-  defmacro transforms(do: body) do
+  defmacro transforms(opts \\ [], do: body) do
     steps = for {:->, _, [ [lhs], rhs ]} <- body do
-      generate_step(lhs, rhs)
+      generate_step(lhs, rhs, opts[:debug])
     end
     
     quote do
       unquote_splicing(steps)
 
       def step({result, model}) do
-        Logger.debug("finished: #{inspect(result)}")
+        unquote(maybe(opts[:debug],
+          quote do
+            Logger.debug("finished: #{inspect(result)}")
+          end))
         { :done, result, model }
       end
     end
   end
 
-  def generate_step(trigger, body) do
-    #      IO.inspect body, pretty: true
+  def generate_step(trigger, body, debug) when debug do
     res = quote do
       def step({ unquote(trigger), unquote({:model, [], nil}) }) do
-        Logger.debug("handling #{inspect unquote(trigger)}")
+        Logger.debug("handling #{inspect(unquote(trigger))}")
+
         case unquote(body) do
           { :update_model, model, result } ->
             Logger.debug("   new model: #{inspect model}")
@@ -92,28 +105,68 @@ defmodule ReducerMachine.Transformations do
         end
       end
     end
-    #      IO.inspect res, pretty: true
-    #      IO.puts Macro.to_string(res)
     res
   end
 
-  defmacro start_with(name) when is_atom(name) do
-    quote do
-      def first_step() do
-        unquote(name)
+  def generate_step(trigger, body, _debug)  do
+    res = quote do
+      def step({ unquote(trigger), unquote({:model, [], nil}) }) do
+        case unquote(body) do
+          { :update_model, model, result } ->
+            { :continue, result, model }
+          result ->
+            { :continue, result, unquote({:model, [], nil}) }
+        end
       end
     end
+    res
   end
+  
 
   def update_model(model, do: return) do
     { :update_model, model, return }
   end
 
-  defmacro __using__(_opts) do
+  defmacro __using__(opts) do
+    result = [
+      standard_header(),
+      model_name(opts[:model]),
+      model_alias(opts[:model], opts[:as])
+    ]
+
+    quote do
+      unquote_splicing(result)
+    end
+  end
+
+  defp model_name(model) do  # may be nil. that's ok.
+    quote do
+      def rm_model() do
+        unquote(model)
+      end
+    end
+  end
+
+  defp model_alias(model, as) when not (is_nil(model) or is_nil(as)) do
+    quote do
+      alias unquote(model), as: unquote(as)
+    end
+  end
+
+  defp model_alias(_, _), do: nil
+
+
+  defp standard_header() do
     quote do
       require Logger
       require unquote(__MODULE__)
       import  unquote(__MODULE__)
     end
   end
+
+
+  defp maybe(flag, code) when flag, do: code
+  defp maybe(_, _), do: nil
+
+
 end

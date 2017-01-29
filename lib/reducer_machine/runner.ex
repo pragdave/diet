@@ -25,10 +25,17 @@ defmodule ReducerMachine.Runner do
 
   defstruct module: nil, current_step: nil, model: nil
 
-  def new(module, initial_model) do
+  def new(module, model_params) do
+    model_module = module.rm_model()
+    model_data = if model_module do
+      model_module.build(model_params)
+    else
+      model_params
+    end
+
     %__MODULE__{
       module: module,
-      model:  initial_model,
+      model:  model_data,
     }
   end
 
