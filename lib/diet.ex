@@ -1,0 +1,2 @@
+defmodule Diet do
+end

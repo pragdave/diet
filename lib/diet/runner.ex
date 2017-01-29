@@ -1,4 +1,4 @@
-defmodule ReducerMachine.Runner do
+defmodule Diet.Runner do
 
   @moduledoc """
   Executes the reduction machine until it generates a terminating

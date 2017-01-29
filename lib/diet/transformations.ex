@@ -1,4 +1,4 @@
-defmodule ReducerMachine.Transformations do
+defmodule Diet.Transformations do
 
   @moduledoc """
   We define a high-level macro, `transforms`. It takes a `do`-block
@@ -12,7 +12,7 @@ defmodule ReducerMachine.Transformations do
 
   ~~~ elixir
   defmodule RLE do
-    use ReducerMachine.Transformations
+    use Diet.Transformations
 
     transforms do
 

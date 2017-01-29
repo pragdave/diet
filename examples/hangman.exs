@@ -2,7 +2,7 @@ defmodule Hangman do
 
   Code.require_file "hangman_model.exs"
 
-  use ReducerMachine.Transformations, model: HangmanModel, as: HM
+  use Diet.Transformations, model: HangmanModel, as: HM
 
   transforms(debug: false) do
 
@@ -44,7 +44,7 @@ defmodule Hangman do
 end
 
 
-alias ReducerMachine.Runner
+alias Diet.Runner
 
 runner = Runner.new(Hangman,  "wombat")
 

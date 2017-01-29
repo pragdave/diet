@@ -1,6 +1,6 @@
 defmodule RLE do
 
-  use ReducerMachine.Transformations
+  use Diet.Transformations
 
   transforms do
 
@@ -22,7 +22,7 @@ defmodule RLE do
 
 end
 
-alias ReducerMachine.Runner
+alias Diet.Runner
 
 runner = Runner.new(RLE, nil)
 
