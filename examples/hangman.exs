@@ -44,27 +44,31 @@ defmodule Hangman do
 end
 
 
-alias Diet.Runner
+alias Diet.Stepper
 
-runner = Runner.new(Hangman,  "wombat")
+stepper = Stepper.new(Hangman,  "wombat")
 
-{ result, runner } = Runner.run(runner, { :make_move, "w" })
+{ result, stepper } = Stepper.run(stepper, { :make_move, "w" })
 IO.inspect result  # => :good_guess
 
-{ result, runner } = Runner.run(runner, { :make_move, "x" })
+{ result, stepper } = Stepper.run(stepper, { :make_move, "x" })
 IO.inspect result  # => :bad_guess
 
-{ result, runner } = Runner.run(runner, { :make_move, "x" })
+{ result, stepper } = Stepper.run(stepper, { :make_move, "x" })
 IO.inspect result  # => { :already_tried, "x" }
 
-{ _     , runner } = Runner.run(runner, { :make_move, "o" })
-{ _     , runner } = Runner.run(runner, { :make_move, "m" })
-{ _     , runner } = Runner.run(runner, { :make_move, "b" })
-{ _     , runner } = Runner.run(runner, { :make_move, "a" })
-{ result, _      } = Runner.run(runner, { :make_move, "t" })
+{ _     , stepper } = Stepper.run(stepper, { :make_move, "o" })
+{ _     , stepper } = Stepper.run(stepper, { :make_move, "m" })
+{ _     , stepper } = Stepper.run(stepper, { :make_move, "b" })
+{ _     , stepper } = Stepper.run(stepper, { :make_move, "a" })
+{ result, stepper } = Stepper.run(stepper, { :make_move, "t" })
 IO.inspect result  # => :game_won
 
+IO.puts ""
 
-
-
-
+stepper.history
+|> Enum.reverse
+|> Enum.map(&Enum.reverse/1)
+|> Enum.map(&inspect(&1, pretty: true))
+|> Enum.join("\n\n")
+|> IO.puts()

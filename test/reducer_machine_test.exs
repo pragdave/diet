@@ -1,8 +1,6 @@
-defmodule ReducerMachineTest do
+defmodule DietTest do
   use ExUnit.Case
-  doctest ReducerMachine
+  doctest Diet
 
-  test "the truth" do
-    assert 1 + 1 == 2
-  end
+
 end
