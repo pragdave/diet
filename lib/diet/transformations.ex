@@ -71,57 +71,87 @@ defmodule Diet.Transformations do
   the new value when it returns.
   """
 
-  defmacro transforms(opts \\ [], do: body) do
+  defmacro reductions(opts \\ [], do: body) do
+    model_name = opts[:model_name] || :model
+    model_name = { model_name, [], nil }
+
     steps = for {:->, _, [ [lhs], rhs ]} <- body do
-      generate_step(lhs, rhs, opts[:debug])
+      generate_step(lhs, rhs, opts[:debug], model_name)
     end
-    
+
+    IO.puts Macro.to_string(hd steps)
+
     quote do
       unquote_splicing(steps)
-
-      def step({result, model}) do
+    
+      def step({result, unquote(model_name)}) do
         unquote(maybe(opts[:debug],
           quote do
             Logger.debug("finished: #{inspect(result)}")
           end))
-        { :done, result, model }
+        { :done, result, unquote(model_name) }
       end
     end
+
   end
 
-  def generate_step(trigger, body, debug) when debug do
-    res = quote do
-      def step({ unquote(trigger), unquote({:model, [], nil}) }) do
+  def generate_step(trigger, body, debug, model_name) when debug do
+    body = quote do
         Logger.debug("handling #{inspect(unquote(trigger))}")
 
         case unquote(body) do
           { :update_model, model, result } ->
-            Logger.debug("   new model: #{inspect model}")
+            Logger.debug("   new model: #{inspect unquote(model_name)}")
             Logger.debug("   => #{inspect result}")
-            { :continue, result, model }
+            { :continue, result, unquote(model_name) }
           result ->
             Logger.debug("   => #{inspect result}")
-            { :continue, result, unquote({:model, [], nil}) }
+            { :continue, result, unquote(model_name) }
         end
-      end
     end
-    res
+
+    generate_full_step(trigger, body, model_name)
   end
 
-  def generate_step(trigger, body, _debug)  do
-    res = quote do
-      def step({ unquote(trigger), unquote({:model, [], nil}) }) do
-        case unquote(body) do
-          { :update_model, model, result } ->
-            { :continue, result, model }
-          result ->
-            { :continue, result, unquote({:model, [], nil}) }
-        end
+  def generate_step(trigger, body, _debug, model_name)  do
+    body = quote do
+      case unquote(body) do
+        { :update_model, unquote(model_name), result } ->
+          { :continue, result, unquote(model_name) }
+        result ->
+          { :continue, result, unquote(model_name) }
       end
     end
-    res
+
+    generate_full_step(trigger, body, model_name)
   end
-  
+
+
+  defp generate_full_step({:when, _, [ trigger, when_clause ]}, body, model_name) do
+    quote do
+      def step(unquote(add_model_to(trigger, model_name)))
+          when unquote(when_clause) do
+        unquote(body)
+      end
+    end
+  end
+
+  defp generate_full_step(trigger, body, model_name) do
+    quote do
+      def step(unquote(add_model_to(trigger, model_name))) do
+        unquote(body)
+      end
+    end
+  end
+
+  defp add_model_to(trigger, model_name) do
+    quote do
+      {
+        unquote(trigger),
+        unquote(model_name)
+      }
+    end
+  end
 
   def update_model(model, do: return) do
     { :update_model, model, return }
@@ -131,7 +161,7 @@ defmodule Diet.Transformations do
     result = [
       standard_header(),
       model_name(opts[:model]),
-      model_alias(opts[:model], opts[:as])
+      model_as(opts[:model], opts[:as]),
     ]
 
     quote do
@@ -147,20 +177,21 @@ defmodule Diet.Transformations do
     end
   end
 
-  defp model_alias(model, as) when not (is_nil(model) or is_nil(as)) do
+
+  defp model_as(model, as) when not (is_nil(model) or is_nil(as)) do
     quote do
       alias unquote(model), as: unquote(as)
     end
   end
 
-  defp model_alias(_, _), do: nil
+  defp model_as(_, _), do: nil
 
 
   defp standard_header() do
     quote do
       require Logger
-      require unquote(__MODULE__)
-      import  unquote(__MODULE__)
+      require Diet.Transformations
+      import  Diet.Transformations
     end
   end
 

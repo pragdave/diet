@@ -22,6 +22,7 @@ defmodule Diet.Stepper do
 
   """
 
+  alias Diet.History
 
   defstruct module: nil, current_step: nil, model: nil, history: []
 
@@ -48,18 +49,20 @@ defmodule Diet.Stepper do
   """
 
   def run(stepper, trigger) do
-    stepper = update_in(stepper.history, &[  [ { :start, trigger, stepper.model } ] | &1 ])
-    result = run_step(stepper, trigger) |> after_step()
+    { result, stepper } =
+    stepper
+    |> History.push()
+    |> run_step(trigger)
+    |> after_step()
 
+    stepper = History.pop(stepper)
+    { result, stepper }
   end
 
-
-
-
   defp run_step(stepper, trigger) do
-    stepper = add_to_history(stepper, { :step, trigger, stepper.model })
-    step_result = { _, result, model } = stepper.module.step({ trigger, stepper.model })
-    stepper = add_to_history(stepper, { :step_end, trigger, result, model })
+    step_result = stepper.module.step({ trigger, stepper.model })
+    { _continue_or_done, result, model } = step_result
+    stepper     = History.record(stepper, trigger, result, model)
     { stepper, step_result }
   end
 
@@ -70,12 +73,6 @@ defmodule Diet.Stepper do
 
   defp after_step({ stepper, { :done, result, model }}) do
     { result, %{ stepper | model: model } }
-  end
-
-  # add the event to the current history entry (the list at the head of
-  # the history list
-  defp add_to_history(stepper = %{ history: [ current | rest ] }, event) do
-    put_in(stepper.history, [ [ event | current ] | rest ])
   end
 
 end
