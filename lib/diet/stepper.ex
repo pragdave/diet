@@ -24,7 +24,12 @@ defmodule Diet.Stepper do
 
   alias Diet.History
 
-  defstruct module: nil, current_step: nil, model: nil, history: []
+  defstruct(
+    module:       nil,
+    model:        nil,
+    history:      [],
+    run_index:    0,
+    step_index:   0)
 
   def new(module, model_params) do
     model_module = module.rm_model()
@@ -40,6 +45,23 @@ defmodule Diet.Stepper do
     }
   end
 
+  def clone(stepper, history) do
+    { number, state } = hd(history)
+    [ run, step ] =
+      number
+      |> to_string
+      |> String.split(".")
+      |> Enum.map(&String.to_integer/1)
+    
+    %__MODULE__ {
+      module: stepper.module,
+      model:  state.new_model,
+      history: history,
+      run_index: run,
+      step_index: step
+    }
+  end
+  
   @doc """
   Run the reduction machine, passing the initial trigger. The machine
   will then return the result of reducing that. If the result
@@ -58,7 +80,7 @@ defmodule Diet.Stepper do
     stepper = History.pop(stepper)
     { result, stepper }
   end
-
+ 
   defp run_step(stepper, trigger) do
     step_result = stepper.module.step({ trigger, stepper.model })
     { _continue_or_done, result, model } = step_result

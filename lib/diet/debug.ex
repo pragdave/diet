@@ -1,24 +1,25 @@
 defmodule Diet.Debug do
 
   def on(stepper) do
-    IO.puts "\nDiet debugger looking at #{stepper.module}\n"
+    name = stepper.module |> to_string |> String.trim_leading("Elixir.")
+    IO.puts "\nDiet debugger looking at #{name}\n"
     IO.puts "h for help\n"
 
     stepper
-    |> build_state
+    |> build_state(name)
     |> interact
   end
 
-  defp build_state(stepper) do
-
+  defp build_state(stepper, name) do
     %{
-      name:    stepper.module |> to_string |> String.trim_leading("Elixir."),
-      stepper: stepper,
+      name:    name,
+      steppers: %{ 0 => stepper },
+      current:  0,
     }
   end
 
   defp interact(state) do
-    res = IO.gets "#{state.name}> "
+    res = IO.gets "#{state.name}[#{state.current}]> "
     handle(res, state)
   end
 
@@ -35,14 +36,68 @@ defmodule Diet.Debug do
     command(cmd, Enum.join(args, " "), state)
   end
 
+  ###################
+  # c [ <step id> ] #
+  ###################
+  
+  defp command("c", "", state) do
+    command("c", [ hd(stepper(state).history).number ], state)
+  end
+
+  defp command("c", number, state) do
+    new_history = stepper(state).history |> rollback_to(String.to_atom(number))
+    new_stepper = Diet.Stepper.clone(stepper(state), new_history)
+    current_max = (state.steppers |> Map.keys |> Enum.max) + 1
+    
+    put_in(state.steppers[current_max], new_stepper)
+    |> Map.put(:current, current_max)
+    |> interact
+  end
+
+  ####################################
+  # clones   — show list of clones   #
+  ####################################
+
+  defp command("clones", _, state) do
+    IO.puts "\n  #\tin state"
+    IO.puts "  --\t--------\n"
+    
+    state.steppers
+    |> Map.keys
+    |> Enum.sort
+    |> Enum.each(&show_clone(state, &1))
+    interact(state)
+  end
+
+  #################################
+  # switch n  — switch to clone n #
+  #################################
+
+  defp command("switch", clone, state) do
+    clone = String.to_integer(clone)
+    state = %{ state | current: clone }
+    history = stepper(state).history
+    step = most_recent_step(history)
+    show_step(history, step)
+    interact(state)
+  end
+  
+  #######################
+  # t   — trace history #
+  #######################
+  
   defp command("t", _, state) do
-    state.stepper.history
+    stepper(state).history
     |> Enum.reverse
     |> dump_history
 
     interact(state)
   end
 
+  ####################
+  # h    — give help #
+  ####################
+  
   defp command("h", _, state) do
     IO.puts """
 
@@ -55,6 +110,10 @@ defmodule Diet.Debug do
     interact(state)
   end
 
+  ##############################
+  # r <args>   — run a stepper #
+  ##############################
+  
   defp command("r", args, state) do
     args = if String.starts_with?(args, ":") && String.contains?(args, " ") do
       String.replace(args, " ", ", ", global: false)
@@ -70,9 +129,10 @@ defmodule Diet.Debug do
 
     try do
       {arg_val, _} = Code.eval_string(args)
-      { result, stepper } = Diet.Stepper.run(state.stepper, arg_val)
+      { result, stepper } = Diet.Stepper.run(stepper(state), arg_val)
       IO.puts "\nResult: #{inspect result, pretty: true}"
-      interact(%{ state | stepper: stepper })
+      put_in(state.steppers[state.current], stepper)
+      |> interact
     rescue
       e in CompileError ->
         IO.puts "error: #{e.description}\n"
@@ -80,6 +140,10 @@ defmodule Diet.Debug do
     end
   end
 
+  ##############
+  # q   — quit #
+  ##############
+  
   defp command("q", _, _state) do
     IO.puts "done\n"
   end
@@ -89,37 +153,45 @@ defmodule Diet.Debug do
   end
 
 
+  ###########################
+  # r.s   — display <r>.<s> #
+  ###########################
 
-  defp command(other, _, state) do
-    case Regex.run(~r{^(\d+)\.(\d+)$}, other) do
+  defp command(other, args, state) do
+    case Regex.run(~r{^\d+\.\d+$}, other) do
 
-      [_, run, step ] ->
-        show_step(Enum.reverse(state.stepper.history),
-          String.to_integer(run),
-          String.to_integer(step))
+      [step_id] ->
+        show_step(stepper(state).history, step_id)
 
       _ ->
-        IO.puts "Unknown command #{inspect other}"
+        IO.puts "Unknown command #{inspect other} #{inspect args}"
     end
 
     interact(state)
   end
 
-  defp show_step(history, run_index, step_index) do
-    run  = Enum.at(history, run_index-1)
-    step = Enum.at(run,     step_index-1)
+  defp most_recent_step(history) do
+    hd(history) |> elem(0)
+  end
 
-    IO.puts "Trigger:  #{inspect step.trigger}"
-    IO.puts "Model:    #{inspect step.old_model}"
-    IO.puts "Result:   #{inspect step.result}"
+  defp show_step(history, step_id) when is_binary(step_id) do
+    show_step(history,  String.to_atom(step_id))
+  end
+  
+  defp show_step(history, step_id) when is_atom(step_id) do
+    step = history[step_id]
+
+    IO.puts "\tTrigger:  #{inspect step.trigger}"
+    IO.puts "\tModel:    #{inspect step.old_model}"
+    IO.puts "\tResult:   #{inspect step.result}"
 
     if step.old_model == step.new_model do
-      IO.puts "New model:  «unchanged»"
+      IO.puts "\tNew model:  «unchanged»"
     else
       ExUnit.Diff.script(inspect(step.old_model), inspect(step.new_model))
       |> List.flatten
       |> Enum.map(&convert_fragment/1)
-      |> (&IO.puts("Changes:  #{&1}")).()
+      |> (&IO.puts("\tChanges:  #{&1}")).()
     end
   end
 
@@ -130,21 +202,32 @@ defmodule Diet.Debug do
 
   defp dump_history(history) do
     history
-    |> Enum.with_index(1)
-    |> Enum.each(&format_one_run/1)
-  end
-
-  defp format_one_run({run, index}) do
-    run
-    |> Enum.with_index(1)
-    |> Enum.each(&format_one_step(&1, index))
+    |> Enum.each(&format_one_step(&1))
     IO.puts ""
   end
 
-  defp format_one_step({step, step_index}, run_index) do
-    header = "#{run_index}.#{step_index}" |> String.pad_leading(6)
-    trigger = step.trigger |> inspect |>String.pad_leading(24)
+  defp format_one_step({ number, step}) do
+    header   = "#{number}" |> String.pad_leading(6)
+    trigger  = step.trigger |> inspect |> String.pad_leading(27)
     modified = if step.old_model == step.new_model, do: "•", else: "►"
     IO.puts "#{header} #{modified} #{trigger} → #{inspect step.result}"
   end
+
+  ## Clone support
+
+  defp rollback_to([], _number), do: []
+  defp rollback_to(history = [{ number, _ } | _rest], number), do: history
+  defp rollback_to([ _ | rest], number), do: rollback_to(rest, number)
+
+  def show_clone(state, number) do
+    flag = if state.current == number, do: "*", else: " "
+    history = state.steppers[number].history
+    step = most_recent_step(history)
+    IO.puts "#{flag} #{number}\tStep #:   #{step}"
+    show_step(history, step)
+    IO.puts ""
+  end
+
+
+  defp stepper(state), do: state.steppers[state.current]
 end

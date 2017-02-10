@@ -1,12 +1,12 @@
 defmodule Diet.History do
-
+  
   def push(stepper) do
-    update_in(stepper.history, &[[] | &1])
+    %{ stepper | run_index: stepper.run_index + 1, step_index: 0 }
+       
   end
 
   def pop(stepper) do
-    update_in(stepper.history,
-      fn [ current | rest ] -> [ Enum.reverse(current) | rest] end)
+    stepper
   end
 
   def record(stepper, trigger, result, new_model) do
@@ -17,7 +17,9 @@ defmodule Diet.History do
       result:    result
     }
 
-    update_in(stepper.history,
-      fn [ current | rest ] -> [[ entry | current ] | rest] end)
+    with step_no = stepper.step_index + 1,
+         step = { :"#{stepper.run_index}.#{step_no}", entry },
+    do: %{ stepper | history: [ step | stepper.history ], step_index: step_no}
   end
+  
 end
