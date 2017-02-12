@@ -98,14 +98,21 @@ defmodule Diet.Debug do
   # h    — give help #
   ####################
   
+  defp command("?", x, state), do: command("h", x, state)
   defp command("h", _, state) do
     IO.puts """
 
-    t       – show execution trace
-    n.n     – show details of step n.n
+    t         – show execution trace
+    n.n       – show details of step n.n
     r «trigger args»
-            – run the stepper using the given trigger
-    q       – quit
+              – run the stepper using the given trigger
+
+    c [n.n]   – clone the current execution at the given step (or the current step
+                if n.n is omitted
+    clones    — list all clones
+    switch n  — switch to clone #n
+   
+    q         – quit
     """
     interact(state)
   end
@@ -134,7 +141,7 @@ defmodule Diet.Debug do
       put_in(state.steppers[state.current], stepper)
       |> interact
     rescue
-      e in CompileError ->
+      e in [ CompileError, SyntaxError ] ->
         IO.puts "error: #{e.description}\n"
         interact(state)
     end

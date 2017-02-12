@@ -79,8 +79,6 @@ defmodule Diet.Transformations do
       generate_step(lhs, rhs, opts[:debug], model_name)
     end
 
-    IO.puts Macro.to_string(hd steps)
-
     quote do
       unquote_splicing(steps)
     
