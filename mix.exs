@@ -2,7 +2,9 @@ defmodule Diet.Mixfile do
   use Mix.Project
 
   @version "0.1.0"
-  @deps    []
+  @deps    [
+    {:ex_doc, ">= 0.0.0", only: :dev}
+  ]
 
   @description """
   Diet is a DSL for writing your program logic as a sequence of trivial
